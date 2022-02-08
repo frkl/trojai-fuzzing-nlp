@@ -34,8 +34,8 @@ print('fuzzer importing 5 %f'%(time.time()-t0));
 def fuzz(fuzzer,interface,examples,params=None):
     t0=time.time()
     default_params=smartparse.obj();
-    default_params.l=6;
-    default_params.budget=100;
+    default_params.l=6; # Maximum number of words for random triggers
+    default_params.budget=100; #How many random triggers to try
     params = smartparse.merge(params,default_params);
     
     default_output=interface.inference(examples);
@@ -83,10 +83,10 @@ def fuzz(fuzzer,interface,examples,params=None):
 def extract_fv_(model_filepath, tokenizer_filepath, scratch_dirpath, examples_dirpath,params=None):
     t0=time.time();
     default_params=smartparse.obj();
-    default_params.bsz=36;
-    default_params.maxl=8;
-    default_params.fuzzer_arch='arch.roberta_fuzzer_k4';
-    default_params.fuzzer_checkpoint='roberta_k4_30.pt';
+    default_params.bsz=36;   #How many clean examples to use
+    default_params.maxl=8;   #Maximum number of words that the meta-learned surrogate can handle. Currently unused
+    default_params.fuzzer_arch='arch.roberta_fuzzer_k4'; # Model architecture file of the meta-learned surrogate. Currently unused
+    default_params.fuzzer_checkpoint='roberta_k4_30.pt'; # Checkpoint of the meta-learned surrogate. Currently unused
     params = smartparse.merge(params,default_params);
     if not examples_dirpath.endswith('.json'):
         fns = [os.path.join(examples_dirpath, fn) for fn in os.listdir(examples_dirpath) if fn.endswith('.json')]
