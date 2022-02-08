@@ -64,3 +64,5 @@ Once feature extraction finishes, run `python crossval_hyper.py --data data_r9fu
 We have not yet implemented the `configure` call in our container. It is currently a placeholder.
 
 We have not thorougly tested the fuzzing interfaces `ner_engine.py`, `qa_engine.py` and `sc_engine.py`. There may be bugs in dataloading and inferencing procedures.
+
+There is a timeout issue on smoke test server, where some library importing are taking minutes to complete. We are still trying to pin down the cause.
