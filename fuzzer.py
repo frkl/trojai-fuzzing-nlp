@@ -120,12 +120,12 @@ def extract_fv_(model_filepath, tokenizer_filepath, scratch_dirpath, examples_di
     libfuzzer=importlib.import_module(params.fuzzer_arch)
     fuzzer=libfuzzer.Fuzzer()
     surrogate=fuzzer.create_surrogate(maxl=params.maxl).cuda();
-    try:
-        checkpoint=torch.load(params.fuzzer_checkpoint);
-    except:
-        checkpoint=torch.load(os.path.join('/',params.fuzzer_checkpoint));
+    #try:
+    #    checkpoint=torch.load(params.fuzzer_checkpoint);
+    #except:
+    #    checkpoint=torch.load(os.path.join('/',params.fuzzer_checkpoint));
     
-    surrogate.load_state_dict(checkpoint);
+    #surrogate.load_state_dict(checkpoint);
     surrogate.register();
     fuzzer.surrogate=surrogate
     
