@@ -1,5 +1,8 @@
 {
-  "parameter1": 1,
-  "parameter2": 2.3,
-  "parameter3": "AdamW"
+  "bsz": 36,
+  "maxl": 8,
+  "l": 6,
+  "budget": 100,
+  "fuzzer_arch": "arch.roberta_fuzzer_k4",
+  "fuzzer_checkpoint": "roberta_k4_30.pt"
 }

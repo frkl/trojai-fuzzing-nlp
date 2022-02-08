@@ -1,23 +1,40 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
   "title": "Algorithm Meta-Parameters",
-  "required": [ "parameter1", "parameter2", "parameter3" ],
+  "required": ["bsz","maxl","l","budget","fuzzer_arch","fuzzer_checkpoint"],
   "type": "object",
   "properties": {
-    "parameter1": {
-      "description": "The first parameter",
+    "bsz": {
+      "description": "Batch size for clean example inference ",
       "type": "integer",
-      "minimum": 0
+      "minimum": 12,
+      "maximum": 72
     },
-    "parameter2": {
-      "description": "The second parameter",
-      "type": "number",
-      "minimum": -1.2,
-      "maximum": 3.4
+    "maxl": {
+      "description": "Surrogate trigger length",
+      "type": "integer",
+      "minimum": 8,
+      "maximum": 8
     },
-    "parameter3": {
-      "description": "The third parameter",
-      "enum": [ "Adam", "AdamW", "SGD" ]
+    "l": {
+      "description": "Trigger length cap",
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 8
+    },
+    "budget": {
+      "description": "Bayesian optimization budget in number of triggers",
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 2000
+    },
+    "fuzzer_arch": {
+      "description": "Fuzzer architecture",
+      "type": "string"
+    },
+    "fuzzer_checkpoint": {
+      "description": "Fuzzer checkpoint",
+      "type": "string"
     }
   }
 }

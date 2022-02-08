@@ -1,0 +1,22 @@
+Bootstrap: docker
+From: pytorch/pytorch:1.8.0-cuda11.1-cudnn8-runtime
+
+%files
+    ./trojan_detector.py /
+    ./arch /
+    ./util /
+    ./learned_parameters /
+    ./*.py /
+    ./roberta*.pt /
+	./*.json /
+
+%post
+    /opt/conda/bin/pip install jsonargparse
+    /opt/conda/bin/pip install jsonpickle
+    /opt/conda/bin/pip install jsonschema
+    /opt/conda/bin/pip install transformers==4.10.3
+    /opt/conda/bin/pip install datasets
+    /opt/conda/bin/pip install scikit-learn
+
+%runscript
+    exec /opt/conda/bin/python3.8 /trojan_detector.py "$@"
