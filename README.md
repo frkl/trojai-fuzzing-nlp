@@ -2,9 +2,9 @@ This repo implements a minimal fuzzing-based framework for Trojan detection for 
 
 ## Usage
 
-Clone this repository. Download TrojAI round 9 models and extract models as `trojai-fuzzing-nlp/data/round9-train-dataset/models/id-00000xxx`, tokenizers as `trojai-fuzzing-nlp/data/round9-train-dataset/tokenizers/roberta-base.pt`, `google-electra-small-discriminator.pt` and `distilbert-base-cased.pt` respectively.
+Clone this repository. Setup environment following https://github.com/usnistgov/trojai-example
 
-Run `build.sh` to evaluate the fuzzer on model `id-00000000`. You should see
+Run `build.sh` to evaluate the fuzzer on model `id-00000000` (assuming you have TrojAI round 9 data downloaded, see data section). You should see
 
 ```
 $ ./build.sh
@@ -40,7 +40,12 @@ Total time 25.636181
 
 ```
 
-`build.sh` also builds a container with `trojan_detector.def`.
+`build.sh` also builds a container with `trojan_detector.def`. Building the container does not require downloading TrojAI data.
+
+## Data
+
+Download TrojAI round 9 models and extract models as `trojai-fuzzing-nlp/data/round9-train-dataset/models/id-00000xxx`, tokenizers as `trojai-fuzzing-nlp/data/round9-train-dataset/tokenizers/roberta-base.pt`, `google-electra-small-discriminator.pt` and `distilbert-base-cased.pt` respectively.
+
 
 ## System architecture
 
