@@ -165,13 +165,13 @@ def extract_fv(id,root='data/round9-train-dataset'):
     #Load fuzzer
     libfuzzer=importlib.import_module(fuzzer_arch)
     fuzzer=libfuzzer.Fuzzer()
-    surrogate=fuzzer.create_surrogate(maxl=maxl).cuda();
-    try:
-        checkpoint=torch.load(fuzzer_checkpoint);
-    except:
-        checkpoint=torch.load(os.path.join('/',fuzzer_checkpoint));
+    #surrogate=fuzzer.create_surrogate(maxl=maxl).cuda();
+    #try:
+    #    checkpoint=torch.load(fuzzer_checkpoint);
+    #except:
+    #    checkpoint=torch.load(os.path.join('/',fuzzer_checkpoint));
     
-    surrogate.load_state_dict(checkpoint);
+    #surrogate.load_state_dict(checkpoint);
     surrogate.register();
     fuzzer.surrogate=surrogate
     
