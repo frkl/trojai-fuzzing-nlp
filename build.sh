@@ -2,4 +2,4 @@ python trojan_detector.py  --model_filepath=./data/round9-train-dataset/models/i
  
  
  
-sudo singularity build test-trojai-r9-v1.simg trojan_detector.def 
+sudo singularity build test-trojai-r9-v3.simg trojan_detector.def 

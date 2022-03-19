@@ -10,8 +10,6 @@ import torch.nn.functional as F
 import torch.nn as nn
 import torch.optim as optim
 import numpy
-import scipy
-import scipy.misc
 import math
 import time
 import random
@@ -90,12 +88,27 @@ assert 'model_name' in data.data['table_ann'].d.keys()
 data.data['table_ann']=db.left_join(data.data['table_ann'],meta_table,'model_name');
 
 for k in data.data['table_ann'].d.keys():
-    if isinstance(k,list):
-        if len(k)>0 and torch.is_tensor(k[0]):
-            for i in range(len(k)):
-                k[i]=k[i].cuda();
+    if isinstance(data.data['table_ann'][k],list):
+        if len(data.data['table_ann'][k])>0 and torch.is_tensor(data.data['table_ann'][k][0]):
+            print('sending to cuda')
+            for i in range(len(data.data['table_ann'][k])):
+                data.data['table_ann'][k][i]=data.data['table_ann'][k][i].cuda();
 
-    
+
+#precompute ws
+arch=importlib.import_module(params.arch);
+try:
+    if 'score' in data.data['table_ann'].d and 'embed' in data.data['table_ann'].d:
+        ws=[];
+        reg=torch.Tensor(1).fill_(0.90).cuda();
+        for i in range(len(data.data['table_ann']['score'])):
+            w=arch.ridge_learn(data.data['table_ann']['embed'][i].float(),data.data['table_ann']['score'][i].float(),reg=reg);
+            ws.append(w);
+        data.data['table_ann'].d['ws']=ws;
+except:
+    pass;
+
+
 
 session=create_session(params);
 params.session=session;

@@ -16,12 +16,24 @@ from transformers import RobertaTokenizer, RobertaForMaskedLM
 
 class Fuzzer():
     def __init__(self):
-        while True:
+        n=0;
+        for n in range(5):
             try:
-                self.tokenizer = RobertaTokenizer.from_pretrained("roberta-base");
-                break;
+                self.tokenizer=torch.load('roberta_tokenizer.pt');
+                break
             except:
-                pass;
+                try:
+                    self.tokenizer=torch.load('/roberta_tokenizer.pt');
+                    break
+                except:
+                    try:
+                        self.tokenizer = RobertaTokenizer.from_pretrained("roberta-base");
+                        torch.save(self.tokenizer,'roberta_tokenizer.pt')
+                        break
+                    except:
+                        print('Failed to load tokenizer for fuzzer, try again');
+                        pass;
+        
         
         self.pad=self.encode(self.tokenizer.pad_token)[0];
         self.vocab_size=len(self.tokenizer);
@@ -55,80 +67,76 @@ class Fuzzer():
             print('unrecognized input');
             a=0/0;
     
-    def generate_random_sequence(self,length=1,decode=False,n=-1):
+    def generate_random_sequence(self,length=1,decode=False,n=-1,maxl=None):
         valid_tokens=torch.LongTensor(self.valid_tokens);
+        if maxl is None:
+            maxl=length;
+        
         if n>=1:
             x=torch.LongTensor(n,length).random_(len(self.valid_tokens));
         else:
             x=torch.LongTensor(length).random_(len(self.valid_tokens));
+        
         tokens=valid_tokens[x];
+        tokens=F.pad(tokens,(0,maxl-length),value=self.pad);
+        
         if decode:
             tokens=self.decode(tokens)
         return tokens;
     
-    def create_surrogate(self,maxl=8):
+    def create_surrogate(self,*args,**argv):
         #Load initial word embeddings
-        while True:
+        n=0;
+        for n in range(5):
             try:
-                roberta=RobertaForMaskedLM.from_pretrained('roberta-base');
-                break;
+                roberta=torch.load('roberta_model.pt');
+                break
             except:
-                pass;
+                try:
+                    roberta=torch.load('/roberta_model.pt');
+                    break
+                except:
+                    try:
+                        roberta=RobertaForMaskedLM.from_pretrained('roberta-base');
+                        torch.save(roberta,'roberta_model.pt')
+                        break
+                    except:
+                        print('Failed to load embeddings for fuzzer, try again');
+                        pass;
         
         we=roberta.roberta.embeddings.word_embeddings.weight;
-        return surrogate(we,maxl=maxl);
-    
-    def find_min(self,x,y,l=8,w=None):
+        return surrogate(we,*args,**argv);
+     
+    def suggest(self,x,y,l=8,target=None):
         #Assuming surrogate has registered we
-        w=w.type(self.surrogate.reg.dtype)
-        y=y.type(self.surrogate.reg.dtype)
-        
-        nobs=y.shape[-1];
-        if w is None:
-            w=torch.Tensor(nobs).fill_(1/nobs).cuda();
-        else:
-            w=w.cuda().view(-1,1);
-        
-        #Calibrate uncertainty from the surrogate
-        #Using 50% for training
-        n=len(x);
-        ind=torch.randperm(n);
-        ind_train=ind[:n//2];
-        ind_test=ind[n//2:]
-        
-        ws=self.surrogate.regress(x[ind_train],y[ind_train]);
-        pred_y,pred_y_std=self.surrogate.score(x[ind_test],*ws);
-        z=(y[ind_test]-pred_y)/(pred_y_std+1e-8);
-        s_cal=torch.log(z.std(dim=0,keepdim=True)+1e-8);
-        s_cal=s_cal*n/(300+n); #Prior weight 300
-        s_cal=torch.exp(s_cal);
-        
-        
+        x=x.to(self.surrogate.device())
+        y=y.to(self.surrogate.device())
         ws=self.surrogate.regress(x,y);
-        best_scores=[];
-        current_best=torch.mm(y,w).squeeze(dim=-1).min();
         
         #Tool for checking what options are available for tokens[ind]
         #Tokens: 1D tensor
         #ind: int
         #dupes: 2D tensor
         #valid_tokens: list
+        valid_tokens=set(self.valid_tokens)
         def check_dupe(tokens,ind,dupes,valid_tokens):
             l=len(tokens);
             q=tokens.clone().to(dupes.device);
             q[ind]=-1;
             #Identify available indicies
-            available_tokens=copy.deepcopy(valid_tokens);
+            available_tokens=valid_tokens;
             if len(dupes)>0:
                 match=(dupes-q.view(1,-1)).eq(0).long().sum(dim=1).ge(l-1).nonzero();
                 match=match.view(-1).tolist()
                 if len(match)>0:
                     dupe_tokens=[int(dupes[j][ind]) for j in match];
-                    available_tokens=list(set(valid_tokens).difference(set(dupe_tokens)));
+                    available_tokens=valid_tokens.difference(set(dupe_tokens));
             
+            available_tokens=list(available_tokens);
             return available_tokens;
         
         
+        best_scores=[];
         with torch.no_grad():
             tokens=torch.LongTensor(self.surrogate.maxl).fill_(self.pad);
             candidates=[];
@@ -139,40 +147,19 @@ class Fuzzer():
                     improved=False
                     for ind in range(0,i):
                         #Generate input with options
-                        available_tokens=check_dupe(tokens,ind,x,self.valid_tokens);
+                        available_tokens=check_dupe(tokens,ind,x,valid_tokens);
                         tokens_=tokens.tolist();
                         tokens_[ind]=torch.LongTensor(available_tokens).cuda();
                         
                         #Evaluate all options
                         qy,qy_std=self.surrogate.score(tokens_,*ws);
-                        #qy_std=qy_std*s_cal;
+                        qy_avg=qy.mean(dim=-1);
+                        qy_std_avg=qy_std.mean(dim=-1); #Looks incorrect but actually correct...
                         
-                        qy_avg=torch.mm(qy,w).squeeze(dim=-1)
-                        qy_std_avg=torch.mm(qy_std**2,w**2).squeeze(dim=-1)
-                        qy_std_avg=qy_std_avg**0.5;
-                        
-                        #Compute expected improvement
-                        #This is minimization version
-                        from scipy.stats import norm
-                        imp=-qy_avg+current_best
-                        z=imp/(qy_std_avg+1e-8);
-                        z=z.double()
-                        
-                        cdfz=0.5*(1+torch.erf(z/math.sqrt(2)));
-                        pdfz=1/math.sqrt(2*math.pi)*torch.exp(-0.5*z**2);
-                        
-                        ei=imp.double()*cdfz+qy_std_avg.double()*pdfz
-                        
-                        #Find largest expected improvement
-                        s=-ei;
+                        #Find largest uncertainty
+                        s=-qy_std_avg;
                         score,j=s.min(dim=0);
                         score=float(score);
-                        
-                        if score>=0:
-                            print('switching criteria',end='\r')
-                            s=-z;
-                            score,j=s.min(dim=0);
-                            score=float(score);
                         
                         j=int(tokens_[ind][j]);
                         if score<best_score:
@@ -188,110 +175,6 @@ class Fuzzer():
         
         return candidates,best_scores
     
-    def find_min2(self,x,y,l=8,w=None):
-        #Assuming surrogate has registered we
-        w=w.type(self.surrogate.reg.dtype)
-        y=y.type(self.surrogate.reg.dtype)
-        
-        nobs=y.shape[-1];
-        if w is None:
-            w=torch.Tensor(nobs).fill_(1/nobs).cuda();
-        else:
-            w=w.cuda().view(-1,1);
-        
-        #Calibrate uncertainty from the surrogate
-        #Using 50% for training
-        n=len(x);
-        ind=torch.randperm(n);
-        ind_train=ind[:n//2];
-        ind_test=ind[n//2:]
-        
-        ws=self.surrogate.regress(x[ind_train],y[ind_train]);
-        pred_y,pred_y_std=self.surrogate.score(x[ind_test],*ws);
-        z=(y[ind_test]-pred_y)/(pred_y_std+1e-8);
-        s_cal=torch.log(z.std(dim=0,keepdim=True)+1e-8);
-        s_cal=s_cal*n/(300+n); #Prior weight 300
-        s_cal=torch.exp(s_cal);
-        
-        
-        ws=self.surrogate.regress(x,y);
-        best_scores=[];
-        current_best=torch.mm(y,w).squeeze(dim=-1).min();
-        
-        #Tool for checking what options are available for tokens[ind]
-        #Tokens: 1D tensor
-        #ind: int
-        #dupes: 2D tensor
-        #valid_tokens: list
-        def check_dupe(tokens,ind,dupes,valid_tokens):
-            l=len(tokens);
-            q=tokens.clone().to(dupes.device);
-            q[ind]=-1;
-            #Identify available indicies
-            available_tokens=copy.deepcopy(valid_tokens);
-            if len(dupes)>0:
-                match=(dupes-q.view(1,-1)).eq(0).long().sum(dim=1).ge(l-1).nonzero();
-                match=match.view(-1).tolist()
-                if len(match)>0:
-                    dupe_tokens=[int(dupes[j][ind]) for j in match];
-                    available_tokens=list(set(valid_tokens).difference(set(dupe_tokens)));
-            
-            return available_tokens;
-        
-        
-        with torch.no_grad():
-            tokens=torch.LongTensor(self.surrogate.maxl).fill_(self.pad);
-            candidates=[];
-            i=l;
-            best_score=1e10;
-            tokens[0:i]=torch.LongTensor(self.generate_random_sequence(i));
-            while True:
-                improved=False
-                for ind in range(0,i):
-                    #Generate input with options
-                    available_tokens=check_dupe(tokens,ind,x,self.valid_tokens);
-                    tokens_=tokens.tolist();
-                    tokens_[ind]=torch.LongTensor(available_tokens).cuda();
-                    
-                    #Evaluate all options
-                    qy,qy_std=self.surrogate.score(tokens_,*ws);
-                    #qy_std=qy_std*s_cal;
-                    
-                    qy_avg=torch.mm(qy,w).squeeze(dim=-1)
-                    qy_std_avg=torch.mm(qy_std**2,w**2).squeeze(dim=-1)
-                    qy_std_avg=qy_std_avg**0.5;
-                    
-                    #Compute expected improvement
-                    #This is minimization version
-                    from scipy.stats import norm
-                    imp=-qy_avg+current_best
-                    z=imp/qy_std_avg;
-                    
-                    cdfz=0.5*(1+torch.erf(z/math.sqrt(2)));
-                    pdfz=1/math.sqrt(2*math.pi)*torch.exp(-0.5*z**2);
-                    
-                    ei=imp*cdfz+qy_std_avg*pdfz
-                    
-                    #Find largest expected improvement
-                    s=-ei;
-                    score,j=s.min(dim=0);
-                    score=float(score);
-                    j=int(tokens_[ind][j]);
-                    if score<best_score:
-                        best_score=score
-                        tokens[ind]=j;
-                        improved=True;
-                
-                if not improved:
-                    break;
-            
-            candidates.append(tokens.tolist());
-            best_scores.append(float(score));
-        
-        return candidates,best_scores
-    
-    
-
 
 
 class MLP(nn.Module):
@@ -374,72 +257,77 @@ class MLP(nn.Module):
         
         return;
 
-def kernel(x,x2):
-    k=2;
-    nh=x.shape[-1]//(k*2);
-    x=x.view(*(x.shape[:-1]),k,2,nh);
-    x2=x2.view(*(x2.shape[:-1]),k,2,nh);
-    
-    x_=x.transpose(-3,-4).contiguous();
-    x2_=x2.transpose(-3,-4).contiguous();
-    #print(x.shape,x2.shape,x.select(-2,0).shape,x2.select(-2,0).shape)
-    
-    K_a=torch.matmul(x_.select(-2,0),x2_.select(-2,0).transpose(-1,-2));
-    K_b=torch.matmul(x_.select(-2,1),x2_.select(-2,1).transpose(-1,-2));
-    
-    
-    
-    
-    K=(K_a*K_b).sum(-3);
-    return K
 
-def kernel_z(x):
-    k=2;
-    nh=x.shape[-1]//(k*2);
-    x=x.view(*(x.shape[:-1]),k,2,nh);
-    x=(x**2).sum(-1);
-    
-    Kz=x.select(-1,0)*x.select(-1,1);
-    Kz=Kz.sum(dim=-1,keepdim=True);
-    return Kz;
-
-
-
+#Let's start with a batch 1 version
 def ridge_learn(X,Y,reg):
+    t0=time.time();
+    
+    #Convert floats to double
+    X=X.type(reg.data.dtype) #bnh
+    Y=Y.type(reg.data.dtype) #bny
+    
+    #X: bnh
+    #Y: bny
+    G=16;
     N=X.shape[-2];
-    nh=X.shape[-1];
+    nh=X.shape[-1]//G;
+    ny=Y.shape[-1];
     
-    b=Y.mean(-2,keepdim=True); #b1y
+    Xorig=X; #(B) N Gnh
+    #Format X as G N h
+    X=X.view(-1,N,G,nh);
+    X=X.transpose(-2,-3).contiguous().view(-1,N,nh); #BG N nh
+    try:
+        U,S,V=torch.svd(X);
+    except:
+        U,S,V=torch.svd(X+1e-4*X.mean()*torch.rand_like(X));
     
-    K=kernel(X,X); #bnn
-    if len(X.shape)>=3:
-        A=K+reg*torch.eye(N).unsqueeze(0).to(X.device)
-    else:
-        A=K+reg*torch.eye(N).to(X.device)
+    time_svd=time.time()-t0
     
-    A=torch.inverse(A.double()).type(reg.data.dtype);
-    a=torch.matmul(A,Y-b);
+    #Remove b from Y
+    b=Y.mean(-2,keepdim=True);
+    Y=Y-b; # (B) N Y
+    Y=Y.view(-1,N,ny) #BNY
     
-    return b,X,A,a
+    logdet=0.5*torch.log(S**2+reg).sum(dim=1); #BG
+    
+    TY=torch.matmul(U.transpose(-2,-1).contiguous().view(-1,G*U.shape[-1],N),Y); #B Gnh Y
+    TY=TY.view(-1,U.shape[-1],ny); # BG nh Y
+    residual=((TY**2)*reg/(S**2+reg).view(-1,S.shape[-1],1)).sum(-2); #BG Y
+    p=F.softmax(-(residual+logdet.view(-1,1)).view(-1,G,ny),dim=-2); #B G Y
+    
+    w0=torch.matmul(V,(S/(S**2+reg)).view(-1,S.shape[-1],1)*TY) #BG nh Y
+    w=(w0.view(-1,G,nh,ny)*p.view(-1,G,1,ny)).view(*Xorig.shape[:-2],G*nh,ny); #(B) Gnh Y
+    
+    time_rest=time.time()-t0;
+    
+    #print(time_svd,time_rest)
+    
+    #for i,x in enumerate([X,Y,U,S,V,b,logdet,TY,residual,p,w0,w]):
+    #    print(i,x.shape);
+    #a=0/0
+    
+    return w,b,U,S,V,reg,p
 
-def ridge_predict(X2,b,X,A,a):
+def ridge_predict(X,w,b,U,S,V,reg,p):
+    X=X.type(w.data.dtype) #(B) N 512
     
-    K2=kernel(X2,X);
-    Kz=kernel_z(X2)
+    Y=torch.matmul(X,w)+b
+    return Y, Y*0
     
-    qy=torch.matmul(K2,a)+b;
+    N=X.shape[-2];
+    nh=V.shape[-2];
+    G=X.shape[-1]//nh;
+    ny=Y.shape[-1];
     
-    qy_var=Kz-(torch.matmul(K2,A)*K2).sum(dim=-1,keepdim=True);
-    qy_var[qy_var.lt(0)]=1e-20;
-    qy_std=qy_var**0.5;
-    
-    sz=[1 for i in qy.shape];
-    sz[-1]=qy.shape[-1];
-    return qy,qy_std.repeat(*sz);
-    
-
-
-
+    X=X.view(-1,N,G,nh);
+    X=X.transpose(-2,-3).contiguous().view(-1,N,nh); #BG N nh
+    TX=torch.matmul(X,V); #BG N *
+    Yvar=((TX**2)*1/(S**2+reg).view(-1,1,S.shape[-1])).sum(dim=-1).view(-1,G,N) #B G N
+    Yvar=torch.matmul(Yvar.transpose(-1,-2),p).view(*Y.shape[:-2],N,ny);
+    Yvar=Yvar.clamp(min=0) #(B) N 1
+    Ystd=Yvar**0.5;
+    return Y,Ystd
 
 
 
@@ -450,19 +338,22 @@ class surrogate(nn.Module):
         we=we.data.clone().float();
         nhword=we.shape[1];
         
-        nh=512*2;
-        nh2=512;
+        nh=16*256;
         nlayers=3;
         
         self.we=nn.Parameter(we);
-        self.encoder=MLP(nhword*maxl,nh2,nh,nlayers);
+        self.encoder=MLP(nhword*maxl,512,nh,nlayers);
         self.reg=nn.Parameter(torch.Tensor(1).fill_(0));
         
         self.nhword=nhword;
         self.nh=nh;
         self.nlayers=nlayers;
         self.maxl=maxl;
+        
         return;
+    
+    def device(self):
+        return self.reg.device;
     
     def register(self,*args,**kwargs):
         self.encoder.pre_multiply(self.we);
@@ -474,7 +365,6 @@ class surrogate(nn.Module):
             e=self.we[x.view(-1),:];
             e=e.view(*(list(x.shape)[:-1]+[-1]));
             e=self.encoder(e)
-            #e=F.normalize(e,dim=-1)
             return e;
         
         return e;
@@ -483,7 +373,7 @@ class surrogate(nn.Module):
     #x: n x k, y: n x 1
     #Output embedding e for test kernel, a for kernel weight, b for classifier bias, A for uncertainty calcs
     def regress(self,x,y):
-        reg=torch.exp(10*self.reg)+1e-8;
+        reg=torch.exp(self.reg)+1e-8;
         e=self.embed(x); #Nxnh
         w0=ridge_learn(e,y,reg);
         return (w0,);
@@ -492,6 +382,7 @@ class surrogate(nn.Module):
     def score(self,qx,w0):
         e=self.embed(qx);
         qy,qy_std=ridge_predict(e,*w0); #ny
+        
         return qy,qy_std;
     
     def forward(self,x,y,qx):

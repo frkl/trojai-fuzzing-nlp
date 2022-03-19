@@ -26,28 +26,24 @@ def example_trojan_detector(model_filepath,
     
     t0=time.time();
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-    print('example_trojan_detector device confirmed, time %f'%(time.time()-t0))
     
-    import fuzzer
-    print('example_trojan_detector Starting feature extraction, time %f'%(time.time()-t0))
-    x,y,e=fuzzer.extract_fv_(model_filepath, tokenizer_filepath, scratch_dirpath, examples_dirpath,config)
-    fvs={'token':[x],'score':[y],'embed':[e]};
-    
-    print('example_trojan_detector Feature extracted, time %f'%(time.time()-t0))
+    import fuzzer_nlp
+    x,y=fuzzer_nlp.extract_fv_(model_filepath, tokenizer_filepath, scratch_dirpath, examples_dirpath,config)
+    fvs={'token':[x],'score':[y]};
     
     if features_filepath is not None:
-        df=pandas.DataFrame(fvs['score'][0].tolist());
+        df=pandas.DataFrame(y.tolist());
         df.to_csv(features_filepath);
         print("Features saved to %s"%features_filepath)
     
-    print('example_trojan_detector Feature saved, time %f'%(time.time()-t0))
     if not parameters_dirpath is None:
+        checkpoint=os.path.join(parameters_dirpath,'model.pt')
         try:
             checkpoint=torch.load(os.path.join(parameters_dirpath,'model.pt'));
         except:
             checkpoint=torch.load(os.path.join('/',parameters_dirpath,'model.pt'));
         
-        print('example_trojan_detector Trojan classifier loaded, time %f'%(time.time()-t0))
+        #Compute ensemble score 
         scores=[];
         for i in range(len(checkpoint)):
             params_=checkpoint[i]['params'];
@@ -62,16 +58,14 @@ def example_trojan_detector(model_filepath,
             scores.append(float(s_i))
         
         scores=sum(scores)/len(scores);
-        scores=torch.sigmoid(torch.Tensor([scores]));
+        scores=torch.sigmoid(torch.Tensor([scores])); #score -> probability
         trojan_probability=float(scores);
     else:
         trojan_probability=0.5;
     
-    print('example_trojan_detector Trojan classifier calculated. Saving to file, time %f'%(time.time()-t0))
+    print('Trojan Probability: %f, time %.2f'%(trojan_probability,time.time()-t0))
     with open(result_filepath, 'w') as fh:
         fh.write("{}".format(trojan_probability))
-    
-    print('example_trojan_detector Trojan Probability: %f, time %f'%(trojan_probability,time.time()-t0))
     
     return trojan_probability
 
@@ -115,7 +109,7 @@ if __name__ == "__main__":
     #print(args,b)
     t0=time.time();
     from jsonargparse import ArgumentParser, ActionConfigFile
-
+    
     parser = ArgumentParser(description='Fake Trojan Detector to Demonstrate Test and Evaluation Infrastructure.')
     parser.add_argument('--model_filepath', type=str, help='File path to the pytorch model file to be evaluated.')
     parser.add_argument('--tokenizer_filepath', type=str, help='File path to the pytorch model (.pt) file containing the correct tokenizer to be used with the model_filepath.')
@@ -123,26 +117,23 @@ if __name__ == "__main__":
     parser.add_argument('--result_filepath', type=str, help='File path to the file where output result should be written. After execution this file should contain a single line with a single floating point trojan probability.')
     parser.add_argument('--scratch_dirpath', type=str, help='File path to the folder where scratch disk space exists. This folder will be empty at execution start and will be deleted at completion of execution.')
     parser.add_argument('--examples_dirpath', type=str, help='File path to the directory containing json file(s) that contains the examples which might be useful for determining whether a model is poisoned.')
-
+    
     parser.add_argument('--round_training_dataset_dirpath', type=str, help='File path to the directory containing id-xxxxxxxx models of the current rounds training dataset.', default=None)
-
+    
     parser.add_argument('--metaparameters_filepath', help='Path to JSON file containing values of tunable paramaters to be used when evaluating models.', action=ActionConfigFile)
     parser.add_argument('--schema_filepath', type=str, help='Path to a schema file in JSON Schema format against which to validate the config file.', default=None)
     parser.add_argument('--learned_parameters_dirpath', type=str, help='Path to a directory containing parameter data (model weights, etc.) to be used when evaluating models.  If --configure_mode is set, these will instead be overwritten with the newly-configured parameters.')
-
+    
     parser.add_argument('--configure_mode', help='Instead of detecting Trojans, set values of tunable parameters and write them to a given location.', default=False, action="store_true")
     parser.add_argument('--configure_models_dirpath', type=str, help='Path to a directory containing models to use when in configure mode.')
-
-    # these parameters need to be defined here, but their values will be loaded from the json file instead of the command line
-    #parser.add_argument('--bins', type=int, help='An example tunable parameter.')
-    #parser.add_argument('--szcap', type=int, help='An example tunable parameter.')
     
-    parser.add_argument('--bsz', type=int, help='An example tunable parameter.')
-    parser.add_argument('--maxl', type=int, help='An example tunable parameter.')
-    parser.add_argument('--l', type=int, help='An example tunable parameter.')
-    parser.add_argument('--budget', type=int, help='An example tunable parameter.')
-    parser.add_argument('--fuzzer_arch', type=str, help='An example tunable parameter.')
-    parser.add_argument('--fuzzer_checkpoint', type=str, help='An example tunable parameter.')
+    
+    
+    parser.add_argument('--bsz', type=int, help='Max. number of examples to use')
+    parser.add_argument('--l', type=int, help='Trigger length during search')
+    parser.add_argument('--budget', type=int, help='Number of triggers to try during search')
+    parser.add_argument('--fuzzer_arch', type=str, help='Which trigger search module to use')
+    parser.add_argument('--fuzzer_checkpoint', type=str, help='The checkpoint of the trigger search module')
     
     args= parser.parse_args()
     
@@ -151,10 +142,10 @@ if __name__ == "__main__":
         if args.schema_filepath is not None:
             with open(args.metaparameters_filepath[0]()) as config_file:
                 config_json = json.load(config_file)
-
+            
             with open(args.schema_filepath) as schema_file:
                 schema_json = json.load(schema_file)
-
+            
             # this throws a fairly descriptive error if validation fails
             jsonschema.validate(instance=config_json, schema=schema_json)
     

@@ -41,21 +41,16 @@ class MLP(nn.Module):
         return h
 
 
-
 class new(nn.Module):
     def __init__(self,params):
         super(new,self).__init__()
         nh=params.nh;
         nh2=params.nh2
         
-        self.budget=100;
+        self.budget=params.nh3;
         
-        if params.nlayers>1:
-            self.encoder1=MLP(self.budget,nh,nh,params.nlayers-1);
-            self.encoder2=MLP(3*nh,nh2,2,params.nlayers2);
-        else:
-            self.encoder1=nn.Identity();
-            self.encoder2=MLP(3*self.budget,nh2,2,params.nlayers2);
+        self.encoder1=nn.Identity();
+        self.encoder2=MLP(3*(self.budget+2),nh2,2,params.nlayers2);
         
         self.w=nn.Parameter(torch.Tensor(1).fill_(1));
         self.b=nn.Parameter(torch.Tensor(1).fill_(0));
@@ -63,8 +58,11 @@ class new(nn.Module):
         return;
     
     def forward(self,data_batch):
-        x=[v[:self.budget,:].clone().cuda().t() for v in data_batch['score']]
-        x=[(v-v.mean())/(v.std()+1e-20) for v in x]
+        x=[v.cuda() for v in data_batch['score']]
+        #x=[v.cuda() for v in data_batch['score']]
+        #x=[F.normalize(v-v[:,0:1],dim=1) for v in x]
+        x=[v.sort(dim=1)[0] for v in x];
+        x=[torch.cat((v[:,0:1],v[:,-1:],F.adaptive_avg_pool1d(v.unsqueeze(0),self.budget).squeeze(0)),dim=-1) for v in x];
         x=[self.encoder1(v) for v in x];
         x=[torch.cat((v.max(dim=0)[0],v.min(dim=0)[0],v.mean(dim=0)),dim=0) for v in x]
         h=torch.stack(x,dim=0);

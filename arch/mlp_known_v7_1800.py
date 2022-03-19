@@ -48,7 +48,7 @@ class new(nn.Module):
         nh=params.nh;
         nh2=params.nh2
         
-        self.budget=100;
+        self.budget=1800;
         
         if params.nlayers>1:
             self.encoder1=MLP(self.budget,nh,nh,params.nlayers-1);
@@ -64,7 +64,7 @@ class new(nn.Module):
     
     def forward(self,data_batch):
         x=[v[:self.budget,:].clone().cuda().t() for v in data_batch['score']]
-        x=[(v-v.mean())/(v.std()+1e-20) for v in x]
+        #x=[(v-v.mean())/(v.std()+1e-20) for v in x]
         x=[self.encoder1(v) for v in x];
         x=[torch.cat((v.max(dim=0)[0],v.min(dim=0)[0],v.mean(dim=0)),dim=0) for v in x]
         h=torch.stack(x,dim=0);

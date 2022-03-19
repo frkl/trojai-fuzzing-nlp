@@ -1,8 +1,7 @@
 {
   "bsz": 36,
-  "maxl": 8,
   "l": 6,
-  "budget": 100,
-  "fuzzer_arch": "arch.roberta_fuzzer_k4",
-  "fuzzer_checkpoint": "roberta_k4_30.pt"
+  "budget": 1800,
+  "fuzzer_arch": "TriggerSearch.bots_roberta_x1N",
+  "fuzzer_checkpoint": "roberta_x1N_12.pt"
 }

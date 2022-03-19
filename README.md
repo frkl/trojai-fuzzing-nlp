@@ -2,7 +2,9 @@ This repo implements a minimal fuzzing-based framework for Trojan detection for 
 
 ## Usage
 
-Clone this repository. Setup environment following https://github.com/usnistgov/trojai-example
+Clone this repository. Setup environment following https://github.com/usnistgov/trojai-example .
+
+Download trigger search surrogate checkpoint at https://www.dropbox.com/s/7dsphbktcnff4a3/roberta_x1N_12.pt?dl=1 and put it under `trojai-fuzzing-nlp/`.
 
 Run `build.sh` to evaluate the fuzzer on model `id-00000000` (assuming you have TrojAI round 9 data downloaded, see data section). You should see
 

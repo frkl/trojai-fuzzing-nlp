@@ -1,20 +1,20 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
   "title": "Algorithm Meta-Parameters",
-  "required": ["bsz","maxl","l","budget","fuzzer_arch","fuzzer_checkpoint"],
+  "technique": "SRI Bayesian Optimization Trigger Search",
+  "technique_description": "Search for triggers using Bayesian Optimization for Trojan classification. 1) A Bayesian optimizer proposes potential triggers to try given results from triggers tried so far. 2) Inference the model with the proposed triggers and record model activations. 3) Record triggers tried and model activations as features, and a Trojan classifier is trained to predict whether the model is Trojaned or not given features. ",
+  "technique_changes": "Trojan classifier: unchanged. Trigger search: using a meta-learned surrogate model + Bayesian Optimization for trigger search instead of random search (which we've been developing since R8). Search at a budget of 1800 triggers per model, same as previous submission. Surrogate model: trained using log probability instead of L2 loss to calibrate the uncertainty predictions. Using a 3-layer 512 neuron linear Gaussian Process surrogate.",
+  "commit_id": "5b078e7fa98ac4c3d1393376d8db1ffa4e976e52",
+  "repo_name": "https://github.com/frkl/trojai-fuzzing-nlp",
+  "required": ["bsz","l","budget","fuzzer_arch","fuzzer_checkpoint"],
+  "additionalProperties": false,
   "type": "object",
   "properties": {
     "bsz": {
-      "description": "Batch size for clean example inference ",
+      "description": "Maximum number of clean examples to use for inference. ",
       "type": "integer",
-      "minimum": 12,
+      "minimum": 1,
       "maximum": 72
-    },
-    "maxl": {
-      "description": "Surrogate trigger length",
-      "type": "integer",
-      "minimum": 8,
-      "maximum": 8
     },
     "l": {
       "description": "Trigger length cap",
@@ -23,18 +23,21 @@
       "maximum": 8
     },
     "budget": {
-      "description": "Bayesian optimization budget in number of triggers",
+      "description": "Number of triggers to try. More triggers might give better performance at the cost of longer run time.",
       "type": "integer",
       "minimum": 1,
       "maximum": 2000
     },
     "fuzzer_arch": {
       "description": "Fuzzer architecture",
-      "type": "string"
+      "type": "string",
+	  "enum": ["TriggerSearch.bots_roberta_x1N", "TriggerSearch.random"]
     },
     "fuzzer_checkpoint": {
       "description": "Fuzzer checkpoint",
-      "type": "string"
+      "type": "string",
+	  "enum": ["roberta_x1N_12.pt"]
     }
   }
 }
+
