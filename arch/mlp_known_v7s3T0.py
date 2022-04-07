@@ -41,21 +41,21 @@ class MLP(nn.Module):
         return h
 
 
-
 class new(nn.Module):
     def __init__(self,params):
         super(new,self).__init__()
-        nh=params.nh;
-        nh2=params.nh2
+        nh=int(params.nh**0.5);
+        self.q0=torch.arange(0,1,1/nh).cuda()
+        nh=len(self.q0);
         
-        self.budget=300;
+        nh2=int(params.nh2**0.5)
+        self.q1=torch.arange(0,1,1/nh2).cuda()
+        nh2=len(self.q1);
         
-        if params.nlayers>1:
-            self.encoder1=MLP(self.budget,nh,nh,params.nlayers-1);
-            self.encoder2=MLP(3*nh,nh2,2,params.nlayers2);
-        else:
-            self.encoder1=nn.Identity();
-            self.encoder2=MLP(3*self.budget,nh2,2,params.nlayers2);
+        nh3=params.nh3;
+        
+        self.encoder1=nn.Identity();
+        self.encoder2=MLP(nh*nh2,nh3,2,params.nlayers2);
         
         self.w=nn.Parameter(torch.Tensor(1).fill_(1));
         self.b=nn.Parameter(torch.Tensor(1).fill_(0));
@@ -63,10 +63,11 @@ class new(nn.Module):
         return;
     
     def forward(self,data_batch):
-        x=[v[:self.budget,:].clone().cuda().t() for v in data_batch['score']]
-        #x=[(v-v.mean())/(v.std()+1e-20) for v in x]
+        x=[v.cuda() for v in data_batch['score']]
+        x=[torch.quantile(v,self.q0,dim=1) for v in x];
         x=[self.encoder1(v) for v in x];
-        x=[torch.cat((v.max(dim=0)[0],v.min(dim=0)[0],v.mean(dim=0)),dim=0) for v in x]
+        x=[torch.quantile(v,self.q1,dim=1) for v in x];
+        x=[v.view(-1) for v in x];
         h=torch.stack(x,dim=0);
         h=self.encoder2(h)
         h=torch.tanh(h)*self.margin;

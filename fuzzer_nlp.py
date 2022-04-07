@@ -24,6 +24,8 @@ def fuzz(fuzzer,interface,examples,l=6,budget=1800,insert_locs=[0,5,25]):
     t0=time.time()
     x=[];
     y=[];
+    print('l %d, budget %d'%(l,budget));
+    print('insert_locs',insert_locs)
     while len(y)<budget:
         #Get queries
         queries,scores=fuzzer.suggest(x,y,l);
@@ -54,13 +56,15 @@ def extract_fv_(model_filepath, tokenizer_filepath, scratch_dirpath, examples_di
     t0=time.time();
     default_params=smartparse.obj();
     default_params.bsz=36;
-    default_params.fuzzer_arch='TriggerSearch.bots_roberta_x1N';
-    default_params.fuzzer_checkpoint='sessions/0000321/model/12.pt';
+    default_params.fuzzer_arch='TriggerSearch.bots_roberta_x1N2';
+    default_params.fuzzer_checkpoint='sessions/0000024/model/36.pt';
     default_params.l=6;
     default_params.budget=1800;
     default_params.insert_locs=[0,5,25];
     params = smartparse.merge(params,default_params);
     
+    
+    print('fuzzer arch %s, fuzzer checkpoint %s, N %d'%(params.fuzzer_arch,params.fuzzer_checkpoint, params.bsz));
     
     #Load interface
     #Check task since fuzzing interface are different
@@ -91,29 +95,37 @@ def extract_fv_(model_filepath, tokenizer_filepath, scratch_dirpath, examples_di
     
     #Load fuzzer
     libfuzzer=importlib.import_module(params.fuzzer_arch)
-    fuzzer=libfuzzer.load(params.fuzzer_checkpoint);
+    fuzzer=libfuzzer.load(params.fuzzer_checkpoint,nh=512,G=1);
     
     #Call fuzzing
     results=fuzz(fuzzer,interface,examples,params.l,params.budget,params.insert_locs);
     return results
 
 #Fuzzing call for TrojAI R9 offline feature extraction
-def extract_fv(id,root='data/round9-train-dataset'):
+def extract_fv(id,root='data/round9-train-dataset',params=None):
     model_filepath, tokenizer_filepath, scratch_dirpath, examples_dirpath=helper.get_paths(id,root)
-    return extract_fv_(model_filepath,tokenizer_filepath,scratch_dirpath,examples_dirpath)
+    return extract_fv_(model_filepath,tokenizer_filepath,scratch_dirpath,examples_dirpath,params=params)
 
 
 if __name__ == "__main__":
-    data=db.Table({'model_id':[],'label':[],'model_name':[],'token':[],'score':[],'embed':[]});
+    data=db.Table({'model_id':[],'label':[],'model_name':[],'token':[],'score':[]});
     data=db.DB({'table_ann':data});
     root='data/round9-train-dataset'
     t0=time.time()
+    
+    params=smartparse.obj();
+    params.fuzzer_arch='TriggerSearch.bots_roberta_e2s';
+    params.fuzzer_checkpoint='sessions/0000126/model/24.pt';
+    params.bsz=36;
+    params.budget=1800;
+    params.l=2;
+    
     
     model_ids=list(range(0,210))
     
     for i,id in enumerate(model_ids):
         print(i,id)
-        x,y=extract_fv(id,root=root);
+        x,y=extract_fv(id,root=root,params=params);
         
         #Load GT
         fname=os.path.join(root,'models','id-%08d'%id,'ground_truth.csv');
@@ -132,5 +144,5 @@ if __name__ == "__main__":
         data['table_ann']['score'].append(y);
         print('Model %d(%d), time %f'%(i,id,time.time()-t0));
         
-        data.save('data_r9fuzz_x1pN_1800_test.pt');
+        data.save('data_r9fuzz_e2s_ex_l2_1800.pt');
 

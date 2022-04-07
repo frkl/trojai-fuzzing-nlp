@@ -77,9 +77,6 @@ def default_params():
     params.lr=1e-3;
     params.load='';
     params.arch='arch.roberta_fuzzer_x1';
-    params.ft=0;
-    params.nh=1024;
-    params.G=8;
     params.session_dir=None;
     
     params.maxl=8;
@@ -105,6 +102,12 @@ params.session=session;
 
 
 
+
+def loss_transform(x):
+    x=-torch.log(-torch.expm1(-x.data.float()).clamp(min=-1e20,max=-1e-20));
+    x=torch.log(x.clamp(min=1e-20,max=1e20));
+    return x;
+
 class trajectories:
     def __init__(self,inds,pad=1,ntrain=1000,ntest=3000,nobs=36,basedirs=['meta-r9-ffa']):
         self.ntrain=ntrain;
@@ -116,7 +119,7 @@ class trajectories:
         #
         self.fnames=[];
         self.x=[];
-        self.y=[];
+        data=[];
         t0=time.time();
         for base in basedirs:
             fnames=os.listdir(base);
@@ -125,23 +128,15 @@ class trajectories:
                 model_id=int(fname[:fname.find('.pt')]);
                 if model_id in inds:
                     self.fnames.append(os.path.join(base,fname))
-                    print('%d %s     '%(model_id,fname), end='\r');
-                    data=torch.load(os.path.join(base,fname));
-                    x=torch.LongTensor(data['triggers']).cuda();
-                    y=torch.Tensor(data['loss']).half().cuda();
-                    
-                    self.x.append(x);
-                    self.y.append(y);
-    
-    
-    
+                    print('%d %s'%(model_id,fname));
     
     def __len__(self):
         return len(self.fnames);
     
     def __getitem__(self,i):
-        x=self.x[i];
-        y=self.y[i];
+        data=torch.load(self.fnames[i]);
+        x=torch.LongTensor(data['triggers']);
+        y=torch.Tensor(data['loss']);
         if not params.maxl==x.shape[1]:
             #Needs filtering
             print('maxl mismatch')
@@ -181,32 +176,32 @@ class trajectories:
 
 
 import importlib
-ts=importlib.import_module(params.arch)
-fuzzer=ts.new();
-surrogate=ts.surrogate(maxl=params.maxl,pretrained=True,nh=params.nh,G=params.G).cuda();
+fuzz=importlib.import_module(params.arch)
+fuzzer=fuzz.new()
+surrogate=fuzz.surrogate(maxl=params.maxl,pretrained=True).cuda();
 if not params.load=='':
     checkpoint=torch.load(params.load);
-    surrogate.load_state_dict(checkpoint,strict=True);
+    surrogate.load_state_dict(checkpoint,strict=False);
 
 surrogate=surrogate.float()
 opt=optim.Adamax(surrogate.parameters(),lr=params.lr);
 
-train_dset=trajectories(list(range(0,140)),pad=fuzzer.pad,ntrain=3000,ntest=3000,nobs=120);
-test_dset=trajectories(list(range(140,210)),pad=fuzzer.pad,ntrain=1000,ntest=10000,nobs=120);
+train_dset=trajectories(list(range(20,1000)),pad=fuzzer.pad,ntrain=1000,ntest=3000,nobs=120,basedirs=['meta-r9-ffa','meta-r8-ffa','meta-r7-ffa']);
+test_dset=trajectories(list(range(0,20)),pad=fuzzer.pad,ntrain=1000,ntest=10000,nobs=120,basedirs=['meta-r9-ffa','meta-r8-ffa','meta-r7-ffa']);
 print('Loaded %d train %d test'%(len(train_dset),len(test_dset)))
 
-nobs_train=[300]#[30,100,300,1000,3000]
-bsz=10;
-nrepeats=3;
-train_loader=DataLoader(train_dset,batch_size=bsz,shuffle=True,num_workers=0,drop_last=True);
+
+bsz=25;
+nrepeats=1;
+train_loader=DataLoader(train_dset,batch_size=bsz,shuffle=True,num_workers=8,drop_last=True);
 
 t0=time.time();
 for epoch in range(301):
     if epoch%3==0:
         surrogate.eval()
-        for ntrain in nobs_train:
+        for ntrain in [30,100,300,1000,3000]:
             test_dset.ntrain=ntrain;
-            test_loader=DataLoader(test_dset,batch_size=1,shuffle=False,num_workers=0,drop_last=False);
+            test_loader=DataLoader(test_dset,batch_size=bsz,shuffle=False,num_workers=8,drop_last=False);
             testloss=[];
             testloss_ex=[];
             testloss_p=[];
@@ -215,29 +210,28 @@ for epoch in range(301):
                     N=len(test_loader);
                     for i,batch in enumerate(test_loader):
                         xtrain,ytrain,xtest,ytest,xex,yex=batch;
-                        xtrain=xtrain.cuda()#.squeeze(0);
-                        ytrain=ytrain.cuda()#.squeeze(0);
-                        xtest=xtest.cuda()#.squeeze(0);
-                        ytest=ytest.cuda()#.squeeze(0);
-                        xex=xex.cuda()#.squeeze(0);
-                        yex=yex.cuda()#.squeeze(0);
+                        xtrain=xtrain.cuda().squeeze(0);
+                        ytrain=ytrain.cuda().squeeze(0);
+                        xtest=xtest.cuda().squeeze(0);
+                        ytest=ytest.cuda().squeeze(0);
+                        xex=xex.cuda().squeeze(0);
+                        yex=yex.cuda().squeeze(0);
                         
                         pred_y,pred_y_std=surrogate(xtrain,ytrain,xtest);
-                        ytest=ytest.type(pred_y.dtype);
                         diff=ytest-pred_y;
                         loss_i=(diff**2).mean();
                         
                         pred_yex,_=surrogate(xtrain,ytrain,xex);
-                        yex=yex.type(pred_yex.dtype);
                         diff_ex=yex-pred_yex;
                         loss_ex_i=(diff_ex**2).mean();
                         
                         pred_y_std=pred_y_std.clamp(min=1e-9);
                         z=(ytest-pred_y)/pred_y_std;
-                        nlogp=0.5*torch.log(pred_y_std)+0.5*z**2
+                        nlogp=torch.log(pred_y_std)+0.5*z**2
                         loss_p=nlogp.mean();
                         
                         
+                        loss=loss_i+loss_ex_i;
                         testloss.append(float(loss_i));
                         testloss_ex.append(float(loss_ex_i));
                         testloss_p.append(float(loss_p));
@@ -252,10 +246,7 @@ for epoch in range(301):
     trainloss=[];
     trainloss_ex=[];
     opt.zero_grad();
-    if params.ft==0:
-        surrogate.train()
-    else:
-        surrogate.eval()
+    surrogate.train()
     
     j=0;
     for n in range(20):
@@ -273,12 +264,11 @@ for epoch in range(301):
             xtest=xtest.cuda();
             ytest=ytest.cuda();
             
-            ntrain=random.choice(nobs_train);
+            ntrain=random.sample([30,100,300,1000,3000],1)[0];
             xtrain=xtrain[:,:ntrain,:].contiguous()
             ytrain=ytrain[:,:ntrain,:].contiguous()
             
             pred_y,pred_y_std=surrogate(xtrain,ytrain,xtest);
-            ytest=ytest.type(pred_y.dtype);
             pred_y_std=pred_y_std.clamp(min=1e-9);
             z=(ytest-pred_y)/pred_y_std;
             nlogp=torch.log(pred_y_std)+0.5*z**2

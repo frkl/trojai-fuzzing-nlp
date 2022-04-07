@@ -122,7 +122,7 @@ class new:
                 #order logits by gt vs nongt
                 logits_gt=logits.gather(1,batch['label'].view(-1,1));
                 logits_nongt=logits.gather(1,1-batch['label'].view(-1,1));
-                logits=torch.cat((logits_gt,logits_nongt),dim=1);
+                logits=torch.cat((logits,logits_gt,logits_nongt),dim=1);
                 
                 outputs.append(logits);
         

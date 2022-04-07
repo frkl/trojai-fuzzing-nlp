@@ -59,7 +59,7 @@ class new(nn.Module):
     
     def forward(self,data_batch):
         x=[v.cuda() for v in data_batch['score']]
-        x=[(v-v.min())/(v.max()-v.min()+1) for v in x]
+        x=[(v-v.median(dim=0,keepdim=True)[0]).abs() for v in x]
         #x=[v.cuda() for v in data_batch['score']]
         #x=[F.normalize(v-v[:,0:1],dim=1) for v in x]
         x=[v.sort(dim=1)[0] for v in x];

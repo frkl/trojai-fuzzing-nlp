@@ -48,7 +48,7 @@ class new(nn.Module):
         nh=params.nh;
         nh2=params.nh2
         
-        self.budget=600;
+        self.budget=300;
         
         if params.nlayers>1:
             self.encoder1=MLP(self.budget,nh,nh,params.nlayers-1);

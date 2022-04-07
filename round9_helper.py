@@ -12,6 +12,142 @@ import warnings
 
 warnings.filterwarnings("ignore")
 
+def get_paths(id,root='data/round9-train-dataset'):
+    id='id-%08d'%id;
+    f=open(os.path.join(root,'models',id,'config.json'),'r');
+    config=json.load(f);
+    f.close();
+    
+    model_filepath=os.path.join(root,'models',id,'model.pt');
+    examples_dirpath=os.path.join(root,'models',id,'clean-example-data.json');
+    scratch_dirpath='./scratch'
+    if 'electra' in config['model_architecture']:
+        tokenizer_filepath=os.path.join(root,'tokenizers/google-electra-small-discriminator.pt');
+    elif 'distilbert' in config['model_architecture']:
+        tokenizer_filepath=os.path.join(root,'tokenizers/distilbert-base-cased.pt');
+    elif 'roberta' in config['model_architecture']:
+        tokenizer_filepath=os.path.join(root,'tokenizers/roberta-base.pt');
+    else:
+        a=0/0;
+    
+    return model_filepath, tokenizer_filepath, scratch_dirpath, examples_dirpath;
+
+def get_paths_r8(id,root='data/round8-train-dataset'):
+    id='id-%08d'%id;
+    f=open(os.path.join(root,'models',id,'config.json'),'r');
+    config=json.load(f);
+    f.close();
+    
+    model_filepath=os.path.join(root,'models',id,'model.pt');
+    examples_dirpath=os.path.join(root,'models',id,'example_data','clean-example-data.json');
+    scratch_dirpath='./scratch'
+    if 'electra' in config['model_architecture']:
+        tokenizer_filepath=os.path.join(root,'tokenizers/tokenizer-google-electra-small-discriminator.pt');
+    elif 'deepset' in config['model_architecture']:
+        tokenizer_filepath=os.path.join(root,'tokenizers/tokenizer-deepset-roberta-base-squad2.pt');
+    elif 'roberta' in config['model_architecture']:
+        tokenizer_filepath=os.path.join(root,'tokenizers/tokenizer-roberta-base.pt');
+    else:
+        a=0/0;
+    
+    return model_filepath, tokenizer_filepath, scratch_dirpath, examples_dirpath;
+
+def get_paths_r7(id,root='data/round7-train-dataset'):
+    id='id-%08d'%id;
+    f=open(os.path.join(root,'models',id,'config.json'),'r');
+    config=json.load(f);
+    f.close();
+    
+    model_filepath=os.path.join(root,'models',id,'model.pt');
+    examples_dirpath=os.path.join(root,'models',id,'clean_example_data');
+    scratch_dirpath='./scratch'
+    if 'MobileBERT' in config['embedding']:
+        tokenizer_filepath=os.path.join(root,'tokenizers/MobileBERT-google-mobilebert-uncased.pt');
+    elif 'RoBERTa' in config['embedding']:
+        tokenizer_filepath=os.path.join(root,'tokenizers/RoBERTa-roberta-base.pt');
+    elif 'DistilBERT' in config['embedding']:
+        tokenizer_filepath=os.path.join(root,'tokenizers/DistilBERT-distilbert-base-cased.pt');
+    elif 'BERT' in config['embedding']:
+        tokenizer_filepath=os.path.join(root,'tokenizers/BERT-bert-base-uncased.pt');
+    else:
+        a=0/0;
+    
+    return model_filepath, tokenizer_filepath, scratch_dirpath, examples_dirpath;
+
+
+def get_paths_r6(id,root='data/round6-train-dataset'): # Model loading doesn't work due to pytorch version difference 
+    id='id-%08d'%id;
+    f=open(os.path.join(root,'models',id,'config.json'),'r');
+    config=json.load(f);
+    f.close();
+    
+    model_filepath=os.path.join(root,'models',id,'model.pt');
+    examples_dirpath=os.path.join(root,'models',id,'clean_example_data');
+    scratch_dirpath='./scratch'
+    if 'distilbert-base-uncased' in config['embedding_flavor']:
+        tokenizer_filepath=os.path.join(root,'tokenizers/DistilBERT-distilbert-base-uncased.pt');
+    elif 'gpt2' in config['embedding_flavor']:
+        tokenizer_filepath=os.path.join(root,'tokenizers/GPT-2-gpt2.pt');
+    else:
+        a=0/0;
+    
+    return model_filepath, tokenizer_filepath, scratch_dirpath, examples_dirpath;
+
+
+def load_stuff(model_filepath, tokenizer_filepath, scratch_dirpath, examples_dirpath):
+    # load the classification model and move it to the GPU
+    pytorch_model = torch.load(model_filepath).cuda()
+    pytorch_model.eval()
+    tokenizer = torch.load(tokenizer_filepath)
+    
+    # load the config file to retrieve parameters
+    model_dirpath, _ = os.path.split(model_filepath)
+    with open(os.path.join(model_dirpath, 'config.json')) as json_file:
+        config = json.load(json_file)
+    
+    #Load example data
+    if examples_dirpath.endswith('.json'):
+        fns=[examples_dirpath];
+    else:
+        fns = [os.path.join(examples_dirpath, fn) for fn in os.listdir(examples_dirpath) if fn.endswith('.json')]
+    
+    fns.sort()
+    examples_filepath = fns[0]
+    
+    #Create dataset based on task
+    if config['task_type']=='qa':
+        pass;
+    elif  config['task_type']=='sc':
+        pass;
+    elif  config['task_type']=='ner':
+        pass;
+    else:
+        print('Unrecognized task type: %s'%config['task_type']);
+    
+    
+    print('Source dataset name = "{}"'.format(config['source_dataset']))
+    if 'data_filepath' in config.keys():
+        print('Source dataset filepath = "{}"'.format(config['data_filepath']))
+    
+    # Load the examples
+    # TODO The cache_dir is required for the test server since /home/trojai is not writable and the default cache locations is ~/.cache
+    dataset = datasets.load_dataset('json', data_files=[examples_filepath], field='data', keep_in_memory=True, split='train', cache_dir=os.path.join(scratch_dirpath, '.cache'))
+    
+    # Load the provided tokenizer
+    # TODO: Use this method to load tokenizer on T&E server
+    
+    # TODO: This should only be used to test on personal machines, and should be commented out
+    #  before submitting to evaluation server, use above method when submitting to T&E servers
+    # model_architecture = config['model_architecture']
+    # tokenizer = transformers.AutoTokenizer.from_pretrained(model_architecture, use_fast=True)
+    
+    tokenized_dataset = tokenize_for_qa(tokenizer, dataset)
+    tokenized_dataset.set_format('pt', columns=['input_ids', 'attention_mask', 'token_type_ids', 'start_positions', 'end_positions'])
+    
+    dataloader = torch.utils.data.DataLoader(tokenized_dataset, batch_size=1)
+    
+    return pytorch_model,tokenizer,dataset,tokenized_dataset,dataloader
+
 
 # The inference approach was adapted from: https://github.com/huggingface/transformers/blob/master/examples/pytorch/question-answering/run_qa.py
 def tokenize_for_qa(tokenizer, dataset):
@@ -141,78 +277,3 @@ def tokenize_for_qa(tokenizer, dataset):
     return tokenized_dataset
 
 
-
-def get_paths(id,root='data/round9-train-dataset'):
-    id='id-%08d'%id;
-    f=open(os.path.join(root,'models',id,'config.json'),'r');
-    config=json.load(f);
-    f.close();
-    
-    model_filepath=os.path.join(root,'models',id,'model.pt');
-    examples_dirpath=os.path.join(root,'models',id,'clean-example-data.json');
-    scratch_dirpath='./scratch'
-    if 'electra' in config['model_architecture']:
-        tokenizer_filepath=os.path.join(root,'tokenizers/google-electra-small-discriminator.pt');
-    elif 'distilbert' in config['model_architecture']:
-        tokenizer_filepath=os.path.join(root,'tokenizers/distilbert-base-cased.pt');
-    elif 'roberta' in config['model_architecture']:
-        tokenizer_filepath=os.path.join(root,'tokenizers/roberta-base.pt');
-    else:
-        a=0/0;
-    
-    return model_filepath, tokenizer_filepath, scratch_dirpath, examples_dirpath;
-
-
-def load_stuff(model_filepath, tokenizer_filepath, scratch_dirpath, examples_dirpath):
-    # load the classification model and move it to the GPU
-    pytorch_model = torch.load(model_filepath).cuda()
-    pytorch_model.eval()
-    tokenizer = torch.load(tokenizer_filepath)
-    
-    # load the config file to retrieve parameters
-    model_dirpath, _ = os.path.split(model_filepath)
-    with open(os.path.join(model_dirpath, 'config.json')) as json_file:
-        config = json.load(json_file)
-    
-    #Load example data
-    if examples_dirpath.endswith('.json'):
-        fns=[examples_dirpath];
-    else:
-        fns = [os.path.join(examples_dirpath, fn) for fn in os.listdir(examples_dirpath) if fn.endswith('.json')]
-    
-    fns.sort()
-    examples_filepath = fns[0]
-    
-    #Create dataset based on task
-    if config['task_type']=='qa':
-        pass;
-    elif  config['task_type']=='sc':
-        pass;
-    elif  config['task_type']=='ner':
-        pass;
-    else:
-        print('Unrecognized task type: %s'%config['task_type']);
-    
-    
-    print('Source dataset name = "{}"'.format(config['source_dataset']))
-    if 'data_filepath' in config.keys():
-        print('Source dataset filepath = "{}"'.format(config['data_filepath']))
-    
-    # Load the examples
-    # TODO The cache_dir is required for the test server since /home/trojai is not writable and the default cache locations is ~/.cache
-    dataset = datasets.load_dataset('json', data_files=[examples_filepath], field='data', keep_in_memory=True, split='train', cache_dir=os.path.join(scratch_dirpath, '.cache'))
-    
-    # Load the provided tokenizer
-    # TODO: Use this method to load tokenizer on T&E server
-    
-    # TODO: This should only be used to test on personal machines, and should be commented out
-    #  before submitting to evaluation server, use above method when submitting to T&E servers
-    # model_architecture = config['model_architecture']
-    # tokenizer = transformers.AutoTokenizer.from_pretrained(model_architecture, use_fast=True)
-    
-    tokenized_dataset = tokenize_for_qa(tokenizer, dataset)
-    tokenized_dataset.set_format('pt', columns=['input_ids', 'attention_mask', 'token_type_ids', 'start_positions', 'end_positions'])
-    
-    dataloader = torch.utils.data.DataLoader(tokenized_dataset, batch_size=1)
-    
-    return pytorch_model,tokenizer,dataset,tokenized_dataset,dataloader

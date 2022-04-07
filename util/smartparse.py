@@ -128,4 +128,7 @@ def parse(default=None,argv=None):
         k=None;
     
     d=OrderedDict(d);
-    return dict2obj(d);
+    d=dict2obj(d);
+    if not default is None:
+        d=merge(d,default);
+    return d;

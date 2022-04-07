@@ -80,6 +80,7 @@ def default_params():
     params.ft=0;
     params.nh=1024;
     params.G=8;
+    params.th=1e0;
     params.session_dir=None;
     
     params.maxl=8;
@@ -106,7 +107,7 @@ params.session=session;
 
 
 class trajectories:
-    def __init__(self,inds,pad=1,ntrain=1000,ntest=3000,nobs=36,basedirs=['meta-r9-ffa']):
+    def __init__(self,pad=1,ntrain=1000,ntest=3000,nobs=36,basedirs=[('meta-r9-ffa',0,1000)]):
         self.ntrain=ntrain;
         self.ntest=ntest;
         self.nobs=nobs;
@@ -114,43 +115,42 @@ class trajectories:
         #Precompute valid sample indicies
         #Triggers < maxl
         #
-        self.fnames=[];
-        self.x=[];
-        self.y=[];
+        data=[];
         t0=time.time();
         for base in basedirs:
-            fnames=os.listdir(base);
+            fnames=os.listdir(base[0]);
             fnames=sorted(fnames);
             for _,fname in enumerate(fnames):
                 model_id=int(fname[:fname.find('.pt')]);
-                if model_id in inds:
-                    self.fnames.append(os.path.join(base,fname))
-                    print('%d %s     '%(model_id,fname), end='\r');
-                    data=torch.load(os.path.join(base,fname));
-                    x=torch.LongTensor(data['triggers']).cuda();
-                    y=torch.Tensor(data['loss']).half().cuda();
+                if model_id in range(base[1],base[2]):
+                    print('%d %s/%s, time %.2f'%(len(data),base[0],fname,time.time()-t0),end='\r');
                     
-                    self.x.append(x);
-                    self.y.append(y);
-    
-    
-    
+                    data_i=torch.load(os.path.join(base[0],fname))
+                    x=torch.LongTensor(data_i['triggers']);
+                    y=torch.Tensor(data_i['loss']).half();
+                    if not params.maxl==x.shape[1]:
+                        #Needs filtering
+                        print('');
+                        print('maxl mismatch')
+                        a=0/0
+                    
+                    if not (~torch.isfinite(y)).long().sum()==0:
+                        #Needs NaN removal
+                        print('');
+                        print('I see NaN')
+                        continue;
+                    
+                    data.append({'x':x,'y':y});
+        
+        self.data=data;
     
     def __len__(self):
-        return len(self.fnames);
+        return len(self.data);
     
     def __getitem__(self,i):
-        x=self.x[i];
-        y=self.y[i];
-        if not params.maxl==x.shape[1]:
-            #Needs filtering
-            print('maxl mismatch')
-            a=0/0
-        
-        if not torch.isnan(y).long().sum()==0:
-            #Needs NaN removal
-            print('I see NaN')
-            a=0/0
+        data=self.data[i];
+        x=data['x'];
+        y=data['y'];
         
         #randomly select n dimensions from y
         ind_y=torch.randperm(y.shape[1])[:self.nobs];
@@ -180,6 +180,8 @@ class trajectories:
 
 
 
+
+
 import importlib
 ts=importlib.import_module(params.arch)
 fuzzer=ts.new();
@@ -191,11 +193,11 @@ if not params.load=='':
 surrogate=surrogate.float()
 opt=optim.Adamax(surrogate.parameters(),lr=params.lr);
 
-train_dset=trajectories(list(range(0,140)),pad=fuzzer.pad,ntrain=3000,ntest=3000,nobs=120);
-test_dset=trajectories(list(range(140,210)),pad=fuzzer.pad,ntrain=1000,ntest=10000,nobs=120);
+train_dset=trajectories(pad=fuzzer.pad,ntrain=3000,ntest=3000,nobs=120,basedirs=[('meta-r8-ffa',0,1000),('meta-r8-old',0,10000),('meta-r7-ffa',0,1000),('meta-r8-extra',0,10000),('meta-r9-ffa',0,30)]);
+test_dset=trajectories(pad=fuzzer.pad,ntrain=3000,ntest=10000,nobs=120,basedirs=[('meta-r9-ffa',140,210)]);
 print('Loaded %d train %d test'%(len(train_dset),len(test_dset)))
 
-nobs_train=[300]#[30,100,300,1000,3000]
+nobs_train=[30,100,300,1000,3000]
 bsz=10;
 nrepeats=3;
 train_loader=DataLoader(train_dset,batch_size=bsz,shuffle=True,num_workers=0,drop_last=True);
@@ -232,7 +234,7 @@ for epoch in range(301):
                         diff_ex=yex-pred_yex;
                         loss_ex_i=(diff_ex**2).mean();
                         
-                        pred_y_std=pred_y_std.clamp(min=1e-9);
+                        pred_y_std=pred_y_std.clamp(min=params.th);
                         z=(ytest-pred_y)/pred_y_std;
                         nlogp=0.5*torch.log(pred_y_std)+0.5*z**2
                         loss_p=nlogp.mean();
@@ -279,7 +281,7 @@ for epoch in range(301):
             
             pred_y,pred_y_std=surrogate(xtrain,ytrain,xtest);
             ytest=ytest.type(pred_y.dtype);
-            pred_y_std=pred_y_std.clamp(min=1e-9);
+            pred_y_std=pred_y_std.clamp(min=params.th);
             z=(ytest-pred_y)/pred_y_std;
             nlogp=torch.log(pred_y_std)+0.5*z**2
             loss_p=nlogp.mean();

@@ -3,8 +3,8 @@
   "title": "Algorithm Meta-Parameters",
   "technique": "SRI Bayesian Optimization Trigger Search",
   "technique_description": "Search for triggers using Bayesian Optimization for Trojan classification. 1) A Bayesian optimizer proposes potential triggers to try given results from triggers tried so far. 2) Inference the model with the proposed triggers and record model activations. 3) Record triggers tried and model activations as features, and a Trojan classifier is trained to predict whether the model is Trojaned or not given features. ",
-  "technique_changes": "Trojan classifier: unchanged. Trigger search: using a meta-learned surrogate model + Bayesian Optimization for trigger search instead of random search (which we've been developing since R8). Search at a budget of 1800 triggers per model, same as previous submission. Surrogate model: trained using log probability instead of L2 loss to calibrate the uncertainty predictions. Using a 3-layer 512 neuron linear Gaussian Process surrogate.",
-  "commit_id": "5b078e7fa98ac4c3d1393376d8db1ffa4e976e52",
+  "technique_changes": "Trojan classifier: unchanged. Trigger search: using a meta-learned surrogate model + Bayesian Optimization for trigger search. Surrogate model trained on R7 & R8 models. Search at a budget of 1800 triggers per model, same as previous submission. Surrogate model: trained using log probability instead of L2 loss to calibrate the uncertainty predictions. Using a 3-layer 512 neuron linear Gaussian Process surrogate. Surrogate model does linear regression without bias & normalization. Surrogate model learns a prior on the weights during meta-learning. ",
+  "commit_id": "d55febe91c2a37f37e20d5a41a835edb2dc07e91",
   "repo_name": "https://github.com/frkl/trojai-fuzzing-nlp",
   "required": ["bsz","l","budget","fuzzer_arch","fuzzer_checkpoint"],
   "additionalProperties": false,
@@ -26,17 +26,17 @@
       "description": "Number of triggers to try. More triggers might give better performance at the cost of longer run time.",
       "type": "integer",
       "minimum": 1,
-      "maximum": 2000
+      "maximum": 3000
     },
     "fuzzer_arch": {
       "description": "Fuzzer architecture",
       "type": "string",
-	  "enum": ["TriggerSearch.bots_roberta_x1N", "TriggerSearch.random"]
+	  "enum": ["TriggerSearch.bots_roberta_e2s","TriggerSearch.bots_roberta_x1N2","TriggerSearch.bots_roberta_x1N", "TriggerSearch.random"]
     },
     "fuzzer_checkpoint": {
       "description": "Fuzzer checkpoint",
       "type": "string",
-	  "enum": ["roberta_x1N_12.pt"]
+	  "enum": ["roberta_fuzzer_e2s_ex_iter24.pt"]
     }
   }
 }

@@ -80,6 +80,7 @@ def default_params():
     params.ft=0;
     params.nh=1024;
     params.G=8;
+    params.th=1e0;
     params.session_dir=None;
     
     params.maxl=8;
@@ -188,14 +189,14 @@ if not params.load=='':
     checkpoint=torch.load(params.load);
     surrogate.load_state_dict(checkpoint,strict=True);
 
-surrogate=surrogate.float()
+surrogate=surrogate.double()
 opt=optim.Adamax(surrogate.parameters(),lr=params.lr);
 
 train_dset=trajectories(list(range(0,140)),pad=fuzzer.pad,ntrain=3000,ntest=3000,nobs=120);
 test_dset=trajectories(list(range(140,210)),pad=fuzzer.pad,ntrain=1000,ntest=10000,nobs=120);
 print('Loaded %d train %d test'%(len(train_dset),len(test_dset)))
 
-nobs_train=[300]#[30,100,300,1000,3000]
+nobs_train=[30,100,300,1000,3000]
 bsz=10;
 nrepeats=3;
 train_loader=DataLoader(train_dset,batch_size=bsz,shuffle=True,num_workers=0,drop_last=True);
@@ -232,7 +233,7 @@ for epoch in range(301):
                         diff_ex=yex-pred_yex;
                         loss_ex_i=(diff_ex**2).mean();
                         
-                        pred_y_std=pred_y_std.clamp(min=1e-9);
+                        pred_y_std=pred_y_std.clamp(min=params.th);
                         z=(ytest-pred_y)/pred_y_std;
                         nlogp=0.5*torch.log(pred_y_std)+0.5*z**2
                         loss_p=nlogp.mean();
@@ -279,7 +280,7 @@ for epoch in range(301):
             
             pred_y,pred_y_std=surrogate(xtrain,ytrain,xtest);
             ytest=ytest.type(pred_y.dtype);
-            pred_y_std=pred_y_std.clamp(min=1e-9);
+            pred_y_std=pred_y_std.clamp(min=params.th);
             z=(ytest-pred_y)/pred_y_std;
             nlogp=torch.log(pred_y_std)+0.5*z**2
             loss_p=nlogp.mean();

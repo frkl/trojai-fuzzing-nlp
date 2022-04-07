@@ -130,7 +130,7 @@ def mask_logsoftmax(score,mask,dim=1):
 class new:
     def __init__(self,model_filepath, tokenizer_filepath):
         self.model=torch.load(model_filepath).cuda();
-        self.model.half();
+        #self.model.half();
         self.tokenizer=torch.load(tokenizer_filepath)
     
     def load_examples(self,examples_filepath,scratch_dirpath,bsz=12,shuffle=False):
