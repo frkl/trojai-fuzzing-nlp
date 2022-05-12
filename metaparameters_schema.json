@@ -3,40 +3,62 @@
   "title": "Algorithm Meta-Parameters",
   "technique": "SRI Bayesian Optimization Trigger Search",
   "technique_description": "Search for triggers using Bayesian Optimization for Trojan classification. 1) A Bayesian optimizer proposes potential triggers to try given results from triggers tried so far. 2) Inference the model with the proposed triggers and record model activations. 3) Record triggers tried and model activations as features, and a Trojan classifier is trained to predict whether the model is Trojaned or not given features. ",
-  "technique_changes": "Trojan classifier: unchanged. Trigger search: using a meta-learned surrogate model + Bayesian Optimization for trigger search. Surrogate model trained on R7 & R8 models. Search at a budget of 1800 triggers per model, same as previous submission. Surrogate model: trained using log probability instead of L2 loss to calibrate the uncertainty predictions. Using a 3-layer 512 neuron linear Gaussian Process surrogate. Surrogate model does linear regression without bias & normalization. Surrogate model learns a prior on the weights during meta-learning. ",
+  "technique_changes": "We extracted a fixed trigger search schedule from the Bayesian Optimization model to greatly speed up processing, to better understand the challenges we are facing in sentiment classification and named entity recognition models. ",
   "commit_id": "d55febe91c2a37f37e20d5a41a835edb2dc07e91",
   "repo_name": "https://github.com/frkl/trojai-fuzzing-nlp",
-  "required": ["bsz","l","budget","fuzzer_arch","fuzzer_checkpoint"],
+  "required": ["bsz_qa","bsz_sc","bsz_ner","budget_qa","budget_sc","budget_ner","fuzzer_arch","fuzzer_checkpoint"],
   "additionalProperties": false,
   "type": "object",
   "properties": {
-    "bsz": {
-      "description": "Maximum number of clean examples to use for inference. ",
+    "bsz_qa": {
+      "description": "Maximum number of clean examples to use for inference. This is for only the Question Answering models.  Default 12 for improved performance. ",
       "type": "integer",
       "minimum": 1,
       "maximum": 72
     },
-    "l": {
-      "description": "Trigger length cap",
+    "bsz_sc": {
+      "description": "Maximum number of clean examples to use for inference. This is for only the Sentiment Classification models. Default 4. ",
       "type": "integer",
       "minimum": 1,
-      "maximum": 8
+      "maximum": 72
     },
-    "budget": {
-      "description": "Number of triggers to try. More triggers might give better performance at the cost of longer run time.",
+    "bsz_ner": {
+      "description": "Maximum number of clean examples to use for inference. This is for only the Named Entity Recognition models. Default 4. ",
       "type": "integer",
       "minimum": 1,
-      "maximum": 3000
+      "maximum": 72
     },
+	
+	
+    "budget_qa": {
+      "description": "Number of triggers to try. More triggers might give better performance at the cost of longer run time. This is for only the Question Answering models. Default 5000 to save time. ",
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 20000
+    },
+    "budget_sc": {
+      "description": "Number of triggers to try. More triggers might give better performance at the cost of longer run time. This is for only the Sentiment Classification models. Default 200000. ",
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 200000
+    },
+    "budget_ner": {
+      "description": "Number of triggers to try. More triggers might give better performance at the cost of longer run time. This is for only the Named Entity Recognition models. Default 200000. ",
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 200000
+    },
+	
+	
     "fuzzer_arch": {
-      "description": "Fuzzer architecture",
+      "description": "Fuzzer architecture. In this version, we have pre-extracted the trigger search schedule to greatly speed up processing. As a result, ",
       "type": "string",
-	  "enum": ["TriggerSearch.bots_roberta_e2s","TriggerSearch.bots_roberta_x1N2","TriggerSearch.bots_roberta_x1N", "TriggerSearch.random"]
+	  "enum": ["TriggerSearch.schedule"]
     },
     "fuzzer_checkpoint": {
-      "description": "Fuzzer checkpoint",
+      "description": "Fuzzer checkpoint. schedule_e2s_l8.pt is the pre-extracted trigger search schedule from the Bayesian Optimization model. schedule_rand.pt are random triggers. ",
       "type": "string",
-	  "enum": ["roberta_fuzzer_e2s_ex_iter24.pt"]
+	  "enum": ["schedule_e2s_l8.pt","schedule_rand.pt"]
     }
   }
 }

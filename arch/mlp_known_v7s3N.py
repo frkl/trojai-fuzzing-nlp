@@ -40,36 +40,30 @@ class MLP(nn.Module):
         h=h.view(*(list(x.shape[:-1])+[-1]));
         return h
 
-def pool(x,nh):
-    h=F.adaptive_avg_pool1d(x.unsqueeze(0),nh-2).squeeze(0)
-    h=torch.cat((x[:,0:1],h,x[:,-1:]),dim=-1);
-    return h;
-
-def encode(x,nh):
-    assert nh%2==0
-    nh=nh//2;
-    x=x-x.min(dim=1,keepdim=True)[0]
-    x=x/(x.max(dim=1,keepdim=True)[0]+1)
-    xmin,_=x.cummin(dim=1)
-    xmax,_=x.cummax(dim=1)
-    xmin=pool(xmin,nh);
-    xmax=pool(xmax,nh);
-    return torch.cat((xmin,xmax),dim=-1);
 
 class new(nn.Module):
     def __init__(self,params):
         super(new,self).__init__()
-        nh=int(params.nh**0.5)*2;
-        nh=nh-nh%2;
-        self.nh=nh;
+        nh=300#int(params.nh**0.5)*4
+        self.q0=torch.arange(0,1+1e-20,1/nh).cuda()
+        nh=len(self.q0);
         
-        nh2=int(params.nh2**0.5)*2;
-        nh2=nh2-nh2%2;
-        self.nh2=nh2;
+        nh2=params.nh2
+        self.q1=torch.arange(0,1+1e-20,1/nh2).cuda()
+        nh2=len(self.q1);
         
         nh3=params.nh3;
         
-        self.encoder2=MLP(nh*nh2,nh3,2,params.nlayers2);
+        if params.nlayers>1:
+            self.encoder1=MLP(nh,params.nh,params.nh,params.nlayers-1);
+            self.encoder2=MLP(params.nh*nh2,nh3,2,params.nlayers2);
+        else:
+            self.encoder1=nn.Identity();
+            self.encoder2=MLP(nh*nh2,nh3,2,params.nlayers2);
+        
+        
+        #self.encoder1=nn.Identity();
+        #self.encoder2=MLP(nh*nh2,nh3,2,params.nlayers2);
         
         self.w=nn.Parameter(torch.Tensor(1).fill_(1));
         self.b=nn.Parameter(torch.Tensor(1).fill_(0));
@@ -78,8 +72,9 @@ class new(nn.Module):
     
     def forward(self,data_batch):
         x=[v.cuda() for v in data_batch['score']]
-        x=[encode(v.t(),self.nh) for v in x] #cumulative min/max pool
-        x=[pool(v.t(),self.nh2) for v in x] #sort pool
+        #x=[torch.quantile(v,self.q0,dim=0) for v in x];
+        x=[self.encoder1(v.t()) for v in x];
+        x=[torch.quantile(v,self.q1,dim=0) for v in x];
         x=[v.view(-1) for v in x];
         h=torch.stack(x,dim=0);
         h=self.encoder2(h)

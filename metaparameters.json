@@ -1,7 +1,10 @@
 {
-  "bsz": 36,
-  "l": 8,
-  "budget": 1800,
-  "fuzzer_arch": "TriggerSearch.bots_roberta_e2s",
-  "fuzzer_checkpoint": "roberta_fuzzer_e2s_ex_iter24.pt"
+  "bsz_qa": 12,
+  "bsz_sc": 4,
+  "bsz_ner": 4,
+  "budget_qa": 5000,
+  "budget_sc": 200000,
+  "budget_ner": 200000,
+  "fuzzer_arch": "TriggerSearch.schedule",
+  "fuzzer_checkpoint": "schedule_e2s_l8.pt"
 }

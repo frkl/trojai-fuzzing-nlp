@@ -27,8 +27,13 @@ def example_trojan_detector(model_filepath,
     t0=time.time();
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     
-    import fuzzer_nlp
+    import fuzzer_nlp_c as fuzzer_nlp
     x,y=fuzzer_nlp.extract_fv_(model_filepath, tokenizer_filepath, scratch_dirpath, examples_dirpath,config)
+    
+    print('Preprocessing features, time %.2f'%(time.time()-t0))
+    N=300;
+    y=y.cuda();
+    y=torch.quantile(y,torch.arange(0,1+1e-20,1/N).cuda(),dim=0).cpu()
     fvs={'token':[x],'score':[y]};
     
     if features_filepath is not None:
@@ -129,9 +134,12 @@ if __name__ == "__main__":
     
     
     
-    parser.add_argument('--bsz', type=int, help='Max. number of examples to use')
-    parser.add_argument('--l', type=int, help='Trigger length during search')
-    parser.add_argument('--budget', type=int, help='Number of triggers to try during search')
+    parser.add_argument('--bsz_qa', type=int, help='Max. number of examples to use (QA)')
+    parser.add_argument('--bsz_sc', type=int, help='Max. number of examples to use (SC)')
+    parser.add_argument('--bsz_ner', type=int, help='Max. number of examples to use (NER)')
+    parser.add_argument('--budget_qa', type=int, help='Number of triggers to try during search (QA)')
+    parser.add_argument('--budget_sc', type=int, help='Number of triggers to try during search (SC)')
+    parser.add_argument('--budget_ner', type=int, help='Number of triggers to try during search (NER)')
     parser.add_argument('--fuzzer_arch', type=str, help='Which trigger search module to use')
     parser.add_argument('--fuzzer_checkpoint', type=str, help='The checkpoint of the trigger search module')
     
