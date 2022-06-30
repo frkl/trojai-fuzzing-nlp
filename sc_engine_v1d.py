@@ -33,7 +33,7 @@ def tokenize_for_qa(tokenizer, dataset):
     
     
     # Padding side determines if we do (question|context) or (context|question).
-    max_seq_length = min(tokenizer.model_max_length, 384)
+    max_seq_length = min(tokenizer.model_max_length, 150)
     if 'mobilebert' in tokenizer.name_or_path:
         max_seq_length = tokenizer.max_model_input_sizes[tokenizer.name_or_path.split('/')[1]]
     

@@ -44,12 +44,12 @@ class MLP(nn.Module):
 class new(nn.Module):
     def __init__(self,params):
         super(new,self).__init__()
-        nh=300#int(params.nh**0.5)*4
-        self.q0=torch.arange(0,1+1e-20,1/nh).cuda()
+        nh=600#int(params.nh**0.5)*4
+        self.q0=torch.arange(0,1+1e-7,1/(nh-1)).cuda()
         nh=len(self.q0);
         
-        nh2=params.nh2
-        self.q1=torch.arange(0,1+1e-20,1/nh2).cuda()
+        nh2=params.nh#int(params.nh**0.5)
+        self.q1=torch.arange(0,1+1e-7,1/(nh2-1)).cuda()
         nh2=len(self.q1);
         
         nh3=params.nh3;

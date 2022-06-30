@@ -14,6 +14,36 @@ warnings.filterwarnings("ignore")
 
 import round9_helper as helper
 
+def batch_hist(x,nbins,dim=0):
+    assert len(x.shape)==2;
+    
+    #make histogram dimension dim 1
+    if dim==0:
+        x=x.t();
+    
+    h=[];
+    for i in range(x.shape[0]):
+        v=x[i];
+        #v=(v-v.mean()).abs();
+        h_i=torch.histc(v,nbins);
+        h_i=h_i/h_i.sum();
+        h_i=torch.cumsum(h_i,dim=0)
+        h.append(h_i);
+    
+    h=torch.stack(h,dim=0);
+    if dim==0:
+        h=h.t();
+    
+    return h
+
+def generate_quantile(N):
+    q=((1+10/(N//2-1))**(-torch.arange(N//2-1))).tolist()+[0];
+    q2=q[::-1]
+    q=torch.Tensor(q)
+    q2=torch.Tensor(q2)
+    q=torch.cat((q2/2,(1-q)/2+0.5),dim=0)
+    return q;
+
 
 def example_trojan_detector(model_filepath,
                             tokenizer_filepath,
@@ -27,19 +57,40 @@ def example_trojan_detector(model_filepath,
     t0=time.time();
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     
-    import fuzzer_nlp_c as fuzzer_nlp
-    x,y=fuzzer_nlp.extract_fv_(model_filepath, tokenizer_filepath, scratch_dirpath, examples_dirpath,config)
+    
+    import fuzzer_nlp_d as fuzzer_nlp
+    x,y=fuzzer_nlp.extract_fv(model_filepath, tokenizer_filepath, scratch_dirpath, examples_dirpath,params=config)
     
     print('Preprocessing features, time %.2f'%(time.time()-t0))
     N=300;
-    y=y.cuda();
-    y=torch.quantile(y,torch.arange(0,1+1e-20,1/N).cuda(),dim=0).cpu()
+    y=y.cuda().float();
+    v1=torch.quantile(y,generate_quantile(N).cuda(),dim=0)
+    v2=batch_hist(y,N,dim=0);
+    y=torch.cat((v1.data,v2.data),dim=0).cpu()
+    
     fvs={'token':[x],'score':[y]};
     
     if features_filepath is not None:
         df=pandas.DataFrame(y.tolist());
         df.to_csv(features_filepath);
         print("Features saved to %s"%features_filepath)
+    
+    #Load config
+    import os
+    import json
+    model_dirpath, _ = os.path.split(model_filepath)
+    with open(os.path.join(model_dirpath, 'config.json')) as json_file:
+        config = json.load(json_file)
+    
+    #task=config['task_type'];
+    #if task=='qa':
+    #    parameters_dirpath=os.path.join(parameters_dirpath,'qa')
+    #elif task=='ner':
+    #    parameters_dirpath=os.path.join(parameters_dirpath,'ner')
+    #elif task=='sc':
+    #    parameters_dirpath=os.path.join(parameters_dirpath,'sc')
+    #else:
+    #    a=0/0;
     
     if not parameters_dirpath is None:
         checkpoint=os.path.join(parameters_dirpath,'model.pt')
@@ -59,7 +110,8 @@ def example_trojan_detector(model_filepath,
             net=net.cuda();
             net.eval();
             
-            s_i=net.logp(fvs).data.cpu()*math.exp(-checkpoint[i]['T']);
+            s_i=net.logp(fvs).data.cpu();
+            s_i=s_i#*math.exp(-checkpoint[i]['T']);
             scores.append(float(s_i))
         
         scores=sum(scores)/len(scores);
@@ -134,14 +186,9 @@ if __name__ == "__main__":
     
     
     
-    parser.add_argument('--bsz_qa', type=int, help='Max. number of examples to use (QA)')
-    parser.add_argument('--bsz_sc', type=int, help='Max. number of examples to use (SC)')
-    parser.add_argument('--bsz_ner', type=int, help='Max. number of examples to use (NER)')
-    parser.add_argument('--budget_qa', type=int, help='Number of triggers to try during search (QA)')
-    parser.add_argument('--budget_sc', type=int, help='Number of triggers to try during search (SC)')
-    parser.add_argument('--budget_ner', type=int, help='Number of triggers to try during search (NER)')
-    parser.add_argument('--fuzzer_arch', type=str, help='Which trigger search module to use')
-    parser.add_argument('--fuzzer_checkpoint', type=str, help='The checkpoint of the trigger search module')
+    parser.add_argument('--nclean', type=int, help='Number of clean examples to use.')
+    parser.add_argument('--bsz', type=int, help='Trigger search batch size')
+    parser.add_argument('--fuzzer_checkpoint', type=str, help='The search schedule of the trigger search module')
     
     args= parser.parse_args()
     

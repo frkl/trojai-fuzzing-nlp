@@ -1,10 +1,5 @@
 {
-  "bsz_qa": 12,
-  "bsz_sc": 4,
-  "bsz_ner": 4,
-  "budget_qa": 5000,
-  "budget_sc": 200000,
-  "budget_ner": 200000,
-  "fuzzer_arch": "TriggerSearch.schedule",
-  "fuzzer_checkpoint": "schedule_e2s_l8.pt"
+  "nclean": 8,
+  "bsz": 48,
+  "fuzzer_checkpoint": "schedule_2gram_l20_500k_62599.pt"
 }

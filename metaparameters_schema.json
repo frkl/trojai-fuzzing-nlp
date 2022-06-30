@@ -2,63 +2,31 @@
   "$schema": "http://json-schema.org/draft-07/schema#",
   "title": "Algorithm Meta-Parameters",
   "technique": "SRI Bayesian Optimization Trigger Search",
-  "technique_description": "Search for triggers using Bayesian Optimization for Trojan classification. 1) A Bayesian optimizer proposes potential triggers to try given results from triggers tried so far. 2) Inference the model with the proposed triggers and record model activations. 3) Record triggers tried and model activations as features, and a Trojan classifier is trained to predict whether the model is Trojaned or not given features. ",
-  "technique_changes": "We extracted a fixed trigger search schedule from the Bayesian Optimization model to greatly speed up processing, to better understand the challenges we are facing in sentiment classification and named entity recognition models. ",
+  "technique_description": "Search for triggers using Google 1- and 2-gram dataset for Trojan classification. 1) Inference the model with the proposed triggers and record model activations. 2) Record triggers tried and model activations as features, and a Trojan classifier is trained to predict whether the model is Trojaned or not given features. ",
+  "technique_changes": "Trigger search schedule generated using the top 200,000 frequent 1-/2-grams from the Google n-gram dataset v2, instead of surrogate-based search schedules based on roberta tokens. We changed the list of 1- and 2-grams by packing them into 20 tokens sequences as trigger candidates, instead of what we did previously, packing 4 1-grams or 2 2-grams. This allows us to run through more 1-/2-grams given the same compute.",
   "commit_id": "d55febe91c2a37f37e20d5a41a835edb2dc07e91",
   "repo_name": "https://github.com/frkl/trojai-fuzzing-nlp",
-  "required": ["bsz_qa","bsz_sc","bsz_ner","budget_qa","budget_sc","budget_ner","fuzzer_arch","fuzzer_checkpoint"],
+  "required": ["nclean","bsz","fuzzer_checkpoint"],
   "additionalProperties": false,
   "type": "object",
   "properties": {
-    "bsz_qa": {
-      "description": "Maximum number of clean examples to use for inference. This is for only the Question Answering models.  Default 12 for improved performance. ",
+    "nclean": {
+      "description": "Maximum number of clean examples to use for inference. Default 8",
       "type": "integer",
       "minimum": 1,
       "maximum": 72
     },
-    "bsz_sc": {
-      "description": "Maximum number of clean examples to use for inference. This is for only the Sentiment Classification models. Default 4. ",
-      "type": "integer",
-      "minimum": 1,
-      "maximum": 72
-    },
-    "bsz_ner": {
-      "description": "Maximum number of clean examples to use for inference. This is for only the Named Entity Recognition models. Default 4. ",
-      "type": "integer",
-      "minimum": 1,
-      "maximum": 72
-    },
-	
-	
-    "budget_qa": {
-      "description": "Number of triggers to try. More triggers might give better performance at the cost of longer run time. This is for only the Question Answering models. Default 5000 to save time. ",
-      "type": "integer",
-      "minimum": 1,
-      "maximum": 20000
-    },
-    "budget_sc": {
-      "description": "Number of triggers to try. More triggers might give better performance at the cost of longer run time. This is for only the Sentiment Classification models. Default 200000. ",
-      "type": "integer",
-      "minimum": 1,
-      "maximum": 200000
-    },
-    "budget_ner": {
-      "description": "Number of triggers to try. More triggers might give better performance at the cost of longer run time. This is for only the Named Entity Recognition models. Default 200000. ",
+    "bsz": {
+      "description": "Batch size for inferencing. Only affects speed. Does not affect performance. Change according to GPU VRAM. Default 48",
       "type": "integer",
       "minimum": 1,
       "maximum": 200000
     },
 	
-	
-    "fuzzer_arch": {
-      "description": "Fuzzer architecture. In this version, we have pre-extracted the trigger search schedule to greatly speed up processing. As a result, ",
-      "type": "string",
-	  "enum": ["TriggerSearch.schedule"]
-    },
     "fuzzer_checkpoint": {
       "description": "Fuzzer checkpoint. schedule_e2s_l8.pt is the pre-extracted trigger search schedule from the Bayesian Optimization model. schedule_rand.pt are random triggers. ",
       "type": "string",
-	  "enum": ["schedule_e2s_l8.pt","schedule_rand.pt"]
+	  "enum": ["schedule_2gram_l20_200k_24267.pt","schedule_1gram_l20_200k_23028.pt","schedule_2gram_l20_500k_62599.pt"]
     }
   }
 }
