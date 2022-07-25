@@ -3,6 +3,7 @@ import os
 import datasets
 import numpy as np
 import torch
+import torch.nn as nn
 import transformers
 import json
 import jsonschema
@@ -158,6 +159,7 @@ class new:
         self.model=torch.load(model_filepath).cuda();
         self.model.half();
         self.model.eval()
+        self.model=nn.DataParallel(self.model)
         self.tokenizer=torch.load(tokenizer_filepath)
     
     def load_examples(self,examples_filepath,scratch_dirpath,bsz=12,shuffle=False):

@@ -1,1 +1,1 @@
-{"nsplits": 8, "pct": 0.75, "arch": "arch.mlp_known_v7s3", "data": "./data_r9fuzzd_2gram_l20_500k_2x8.pt", "tag": "", "session_dir": null, "budget": 10000, "argv": ["crossval_hyper_s3sc.py", "--data", "./data_r9fuzzd_2gram_l20_500k_2x8.pt", "--arch", "arch.mlp_known_v7s3", "--pct", "0.75"]}
+{"nsplits": 8, "pct": 0.5, "arch": "arch.mlp_known_v7s2T0", "data": "./data_r9fuzz_e2s_ex_l8_1800.pt", "session_dir": null, "budget": 10000, "argv": ["crossval_hyper.py", "--data", "./data_r9fuzz_e2s_ex_l8_1800.pt", "--arch", "arch.mlp_known_v7s2T0"]}

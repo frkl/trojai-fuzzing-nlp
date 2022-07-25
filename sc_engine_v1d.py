@@ -3,6 +3,7 @@ import os
 import datasets
 import numpy as np
 import torch
+import torch.nn as nn
 import transformers
 import json
 import jsonschema
@@ -71,6 +72,7 @@ class new:
         self.model=torch.load(model_filepath).cuda();
         self.model.half();
         self.model.eval()
+        self.model=nn.DataParallel(self.model);
         self.tokenizer=torch.load(tokenizer_filepath)
         self.max_seq_length = self.tokenizer.model_max_length
     
